@@ -1,7 +1,6 @@
 library(rjson)
 library(plyr)
 library(boot)
-library(ggplot2)
 
 my.JSON <- fromJSON(file="https://pomber.github.io/covid19/timeseries.json")
 
@@ -86,4 +85,3 @@ new <- data.frame(date = as.Date(c("2020-05-05","2020-05-06","2020-05-07","2020-
 pred_confirmed <-predict.lm(fit2,new,interval = "confidence",level = 0.95)
 newindia_df <- cbind(new, pred_confirmed)
 newindia_df
-
