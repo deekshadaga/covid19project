@@ -1,0 +1,45 @@
+---
+title: "Covid-19 Project"
+date: "May 5, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo=FALSE }
+library(rjson)
+library(plyr)
+my.JSON <- fromJSON(file="https://pomber.github.io/covid19/timeseries.json")
+India_json <- lapply(my.JSON$India, function(x){ unlist(x)})
+India_df <- rbind.fill(lapply(India_json,function(x) do.call("data.frame", as.list(x))))
+India_df <- do.call("rbind", India_json)
+India_df <- as.data.frame(India_df)
+India_df$date <- as.Date(India_df$date,format = "%Y-%m-%d")
+India_df$confirmed <- as.numeric(India_df$confirmed)
+India_df$deaths <- as.numeric(India_df$deaths)
+India_df$recovered <- as.numeric(India_df$recovered)
+attach(India_df)
+``` 
+
+
+```{r echo=FALSE}
+#scatter plot
+plot(date,confirmed,pch = 16,xlab = "date", col = "blue"
+     ,ylab = "confirmed cases", main = "confirmed cases per day")
+```
+```{r echo=FALSE}
+# polynomial regression
+fit2 = lm(confirmed~poly(date,6))
+#prediction
+new <- data.frame(date = as.Date(c("2020-05-05","2020-05-06","2020-05-07","2020-05-08","2020-05-09","2020-05-10","2020-05-11")))
+pred_confirmed <-predict.lm(fit2,new,interval = "confidence",level = 0.95)
+newindia_df <- cbind(new, pred_confirmed)
+names(newindia_df)[3] <- "minimum"
+names(newindia_df)[4] <- "maximum"
+```
+### Predictions for confirmed cases :
+```{r echo=FALSE}
+knitr::kable(newindia_df[,-2])
+```
