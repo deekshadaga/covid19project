@@ -1,0 +1,121 @@
+---
+title: "Covid-19 Project"
+author: "Deeksha Daga"
+date: "May 5, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo=FALSE }
+library(gtools)
+library(rjson)
+library(plyr)
+my.JSON <- fromJSON(file="https://pomber.github.io/covid19/timeseries.json")
+India_json <- lapply(my.JSON$India, function(x){ unlist(x)})
+India_df <- rbind.fill(lapply(India_json,function(x) do.call("data.frame", as.list(x))))
+India_df <- do.call("rbind", India_json)
+India_df <- as.data.frame(India_df)
+
+cdate <- as.Date(India_df$date,format = "%Y-%m-%d")
+cconfirmed <- as.numeric(India_df$confirmed)
+cdeaths <- as.numeric(India_df$deaths)
+crecovered <- as.numeric(India_df$recovered)
+
+world_json <- lapply(my.JSON, function(x){unlist(x)})
+world_df <- rbind.fill(lapply(world_json,function(x) do.call("data.frame",as.list(x))))
+world_df <- do.call("rbind", world_json)
+world_df <- as.data.frame(world_df)
+
+wdate <- as.Date(world_df$date,format = "%Y-%m-%d")
+wconfirmed <- as.numeric(world_df$confirmed)
+wdeaths <- as.numeric(world_df$deaths)
+wrecovered <- as.numeric(world_df$recovered)
+
+#No. of days since 22-jan-2020
+today = 105
+``` 
+
+
+```{r echo=FALSE}
+#scatter plot
+plot(cdate,cconfirmed,pch = 16,xlab = "month", col = "blue"
+     ,ylab = "no. of cases ", main = "confirmed cases in india")
+```
+
+```{r echo=FALSE}
+# polynomial regression
+cfit = lm(cconfirmed~poly(cdate,6))
+#prediction
+a = today+1; b = today+7
+new <- data.frame(cdate = as.Date(a:b ,origin = "2020-01-21"))
+pred_confirmed <-predict.lm(cfit,new,interval = "confidence",level = 0.95)
+newindia_df <- cbind(new, pred_confirmed)
+names(newindia_df)[3] <- "minimum"
+names(newindia_df)[4] <- "maximum"
+```
+
+### Predictions for total confirmed cases in India:
+
+```{r echo=FALSE}
+knitr::kable(newindia_df[,-2])
+```
+
+```{r echo=FALSE}
+t_case=c();t_dead=c();t_recovered=c();t_date=c(1:today)
+count=0
+cols = seq(from=2, length=today,by=4)
+
+for (j in cols){
+  total_cases = 0
+  total_deaths = 0
+  total_recovered = 0
+  count = count + 1
+  for(i in world_df[,j]){
+    total_cases = total_cases + as.numeric(i)
+  }
+  for(i in world_df[,j+1]){
+    total_deaths = total_deaths + as.numeric(i)
+  }
+  for(i in world_df[,j+2]){
+    total_recovered = total_recovered + as.numeric(i)
+  }
+  t_case[count] = as.numeric(total_cases)
+  t_dead[count] = as.numeric(total_deaths)
+  t_recovered[count] = as.numeric(total_recovered)
+}
+wdate <- as.Date(t_date,origin = "2020-01-21")
+wdf = cbind(t_date,t_case,t_dead,t_recovered)
+
+wdf <- as.data.frame(wdf)
+wconfirmed <- as.numeric(wdf$t_case)
+wdeaths <- as.numeric(wdf$t_dead)
+wrecovered <- as.numeric(wdf$t_recovered)
+```
+
+```{r echo=FALSE}
+#scatter plot
+plot(wdate,wconfirmed,pch = 16,xlab = "month", col = "blue"
+     ,ylab = "no. of cases", main = "confirmed cases in world")
+```
+
+```{r pressure, echo=FALSE}
+wfit = lm(wconfirmed~poly(wdate,6))
+a = today+1; b = today+7
+predict_date <- as.Date(a:b,origin="2020-01-20")
+new <- data.frame(wdate = as.Date(a:b ,origin = "2020-01-22"))
+preddate <- data.frame(wdate = as.Date(a:b ,origin = "2020-01-21"))
+pred_wconfirmed <-predict.lm(wfit,new,interval = "confidence",level = 0.95)
+newworld_df <- cbind(preddate, pred_wconfirmed)
+names(newworld_df)[3] <- "minimum"
+names(newworld_df)[4] <- "maximum"
+names(newworld_df)[1] <- "date"
+```
+
+### Predictions for total confirmed cases in World:
+
+```{r echo=FALSE}
+knitr::kable(newworld_df[,-2])
+```
