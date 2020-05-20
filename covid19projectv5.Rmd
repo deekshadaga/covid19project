@@ -1,0 +1,173 @@
+---
+title: "covid19projectv5"
+author: "deeksha daga"
+date: "5/15/2020"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo=FALSE }
+library(gtools)
+library(rjson)
+library(plyr)
+my.JSON <- fromJSON(file="https://pomber.github.io/covid19/timeseries.json")
+
+world_json <- lapply(my.JSON, function(x){unlist(x)})
+world_df <- rbind.fill(lapply(world_json,function(x) do.call("data.frame",as.list(x))))
+world_df <- do.call("rbind", world_json)
+world_df <- as.data.frame(world_df)
+
+wdate <- as.Date(world_df$date,format = "%Y-%m-%d")
+wconfirmed <- as.numeric(world_df$confirmed)
+wdeaths <- as.numeric(world_df$deaths)
+wrecovered <- as.numeric(world_df$recovered)
+
+#No. of days since 22-jan-2020
+current = as.Date(Sys.Date())
+start = as.Date("2020-01-22")
+today = as.numeric(current - start)
+options(scipen=999)
+
+country <-row.names(world_df)
+``` 
+
+```{r echo=FALSE}
+t_case=c();t_dead=c();t_recovered=c();t_date=c(1:today)
+count=0
+cols = seq(from=2, length=today,by=4)
+
+for (j in cols){
+  total_cases = 0
+  total_deaths = 0
+  total_recovered = 0
+  count = count + 1
+  for(i in world_df[,j]){
+    total_cases = total_cases + as.numeric(i)
+  }
+  for(i in world_df[,j+1]){
+    total_deaths = total_deaths + as.numeric(i)
+  }
+  for(i in world_df[,j+2]){
+    total_recovered = total_recovered + as.numeric(i)
+  }
+  t_case[count] = as.numeric(total_cases)
+  t_dead[count] = as.numeric(total_deaths)
+  t_recovered[count] = as.numeric(total_recovered)
+}
+wdate <- as.Date(t_date,origin = "2020-01-21")
+wdf = cbind(t_date,t_case,t_dead,t_recovered)
+a = today + 1
+b = today + 7
+wdf <- as.data.frame(wdf)
+wconfirmed <- as.numeric(wdf$t_case)
+wdeaths <- as.numeric(wdf$t_dead)
+wrecovered <- as.numeric(wdf$t_recovered)
+predict_date <- as.Date(a:b,origin="2020-01-20")
+predict_date = c(as.character.Date(predict_date))
+```
+
+```{r echo=FALSE}
+#scatter plot
+par(las=2,mgp=c(5,1,0),mar=c(6,6,6,6))
+plot(wdate,wconfirmed,pch = 16,xlab = "date", col = "blue",xaxt="n"
+     ,ylab = "no. of cases", main = "confirmed cases in world")
+axis.Date(1, at=seq(min(wdate),max(wdate),by=10), format="%d %b %y")
+```
+
+```{r pressure, echo=FALSE}
+wfit = lm(wconfirmed~poly(wdate,6))
+a = today+1; b = today+7
+predict_date <- as.Date(a:b,origin="2020-01-20")
+new <- data.frame(wdate = as.Date(a:b ,origin = "2020-01-22"))
+preddate <- data.frame(wdate = as.Date(a:b ,origin = "2020-01-21"))
+pred_wconfirmed <-predict.lm(wfit,new,interval = "confidence",level = 0.95)
+newworld_df <- cbind(preddate, pred_wconfirmed)
+names(newworld_df)[3] <- "minimum"
+names(newworld_df)[4] <- "maximum"
+names(newworld_df)[1] <- "date"
+```
+
+### Predictions for total confirmed cases in World:
+
+```{r echo=FALSE}
+knitr::kable(newworld_df,align = "crrr",format.args = list(big.mark = ",", 
+  scientific = FALSE))
+```
+
+
+```{r eruptions, echo=FALSE}
+ui <- fluidPage(
+  titlePanel("covid"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("cont","select the country whose prediction you want to see",choices = country,selected = "India")
+    ),
+    mainPanel(
+      plotOutput("countrydata"),
+      tableOutput("predtable")
+    )
+  )
+)
+server <- shinyServer(function(input,output){
+    output$countrydata <- renderPlot({
+      cjson <- lapply(my.JSON[[input$cont]], function(x){ unlist(x)})
+      cdf <- rbind.fill(lapply(cjson,function(x) do.call("data.frame", as.list(x))))
+      cdf <- do.call("rbind", cjson)
+      cdf <- as.data.frame(cdf)
+      
+      cdate <- as.Date(cdf$date,format = "%Y-%m-%d")
+      cconfirmed <- as.numeric(cdf$confirmed)
+      cdeaths <- as.numeric(cdf$deaths)
+      crecovered <- as.numeric(cdf$recovered)
+      #scatter plot
+      par(las=2,mgp=c(5,1,0),mar=c(6,6,6,6))
+      plot(cdate,cconfirmed,pch = 16,xlab = "date", col = "blue",xaxt = "n"
+           ,ylab = "no. of cases ", main = c("confirmed cases in ",input$cont))
+      axis.Date(1, at=seq(min(cdate),max(cdate),by=10), format="%d %b %y")
+    })
+    output$predtable <- renderTable({
+      
+      cjson <- lapply(my.JSON[[input$cont]], function(x){ unlist(x)})
+      cdf <- rbind.fill(lapply(cjson,function(x) do.call("data.frame", as.list(x))))
+      cdf <- do.call("rbind", cjson)
+      cdf <- as.data.frame(cdf)
+      
+      cdate <- as.Date(cdf$date,format = "%Y-%m-%d")
+      cconfirmed <- as.numeric(cdf$confirmed)
+      cdeaths <- as.numeric(cdf$deaths)
+      crecovered <- as.numeric(cdf$recovered)
+      
+      # polynomial regression
+      cfit = lm(cconfirmed~poly(cdate,6))
+      
+      current = as.Date(Sys.Date())
+      start = as.Date("2020-01-22")
+      today = as.numeric(current - start)
+      options(scipen=999)
+
+      #prediction
+      a = today+1
+      b = today+7
+      new <- data.frame(cdate = as.Date(a:b ,origin = "2020-01-21"))
+      pred_confirmed <-predict.lm(cfit,new,interval = "confidence",level = 0.95)
+      cdf <- as.data.frame(cbind(preddate,predict.lm(cfit,new,interval="confidence")))
+
+      cdf$fit <- round(as.numeric(cdf$fit))
+      cdf$upr <- round(as.numeric(cdf$upr))
+      cdf$lwr <- round(as.numeric(cdf$lwr))
+      cdf$fit <- format(cdf$fit,big.mark=",",scientific=FALSE)
+      cdf$lwr <- format(cdf$lwr,big.mark=",",scientific=FALSE)
+      cdf$upr <- format(cdf$upr,big.mark=",",scientific=FALSE)
+      names(cdf)[3] <- "minimum"
+      names(cdf)[4] <- "maximum"
+      names(cdf)[1] <- "date" 
+      cdf$date <- as.Date(a:b,origin="2020-01-22",format("%Y-%m-%d"))
+      cdf
+    })
+})
+shinyApp(ui=ui,server=server)
+```

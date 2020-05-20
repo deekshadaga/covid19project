@@ -1,0 +1,218 @@
+---
+title: "Covid-19 Project"
+author: "Deeksha Daga"
+date: "May 5, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo=FALSE }
+library(gtools)
+library(rjson)
+library(plyr)
+library(Metrics)
+my.JSON <- fromJSON(file="https://pomber.github.io/covid19/timeseries.json")
+India_json <- lapply(my.JSON$India, function(x){ unlist(x)})
+India_df <- rbind.fill(lapply(India_json,function(x) do.call("data.frame", as.list(x))))
+India_df <- do.call("rbind", India_json)
+India_df <- as.data.frame(India_df)
+
+cdate <- as.Date(India_df$date,format = "%Y-%m-%d")
+cconfirmed <- as.numeric(India_df$confirmed)
+cdeaths <- as.numeric(India_df$deaths)
+crecovered <- as.numeric(India_df$recovered)
+
+world_json <- lapply(my.JSON, function(x){unlist(x)})
+world_df <- rbind.fill(lapply(world_json,function(x) do.call("data.frame",as.list(x))))
+world_df <- do.call("rbind", world_json)
+world_df <- as.data.frame(world_df)
+
+wdate <- as.Date(world_df$date,format = "%Y-%m-%d")
+wconfirmed <- as.numeric(world_df$confirmed)
+wdeaths <- as.numeric(world_df$deaths)
+wrecovered <- as.numeric(world_df$recovered)
+#No. of days since 22-jan-2020
+current = as.Date(Sys.Date())
+start = as.Date("2020-01-22")
+today = as.numeric(current - start)
+options(scipen=999)
+
+``` 
+
+
+### Graph showing total confirmed cases in India:
+
+```{r echo=FALSE}
+# polynomial regression
+cfit = lm(cconfirmed~poly(cdate,6))
+
+#scatter plot
+par(las=2,mgp=c(5,1,0),mar=c(6,6,6,6))
+plot(cdate,cconfirmed,pch = 16,xlab = "date", col = "blue",xaxt = "n"
+     ,ylab = "no. of cases ", main = "confirmed cases in india")
+points(cdate,fitted(cfit),col="red",pch=1)
+axis.Date(1, at=seq(min(cdate),max(cdate),by=10), format="%d %b %y")
+legend("topleft",c("Actual","Predicted"), 
+       col=c("blue","red"), lwd=2)
+```
+
+```{r echo=FALSE}
+#prediction
+a = today+1; b = today+7
+new <- data.frame(cdate = as.Date(a:b ,origin = "2020-01-21"))
+pred_confirmed <-predict.lm(cfit,new,interval = "confidence",level = 0.95)
+newindia_df <- cbind(new, pred_confirmed)
+names(newindia_df)[3] <- "minimum"
+names(newindia_df)[4] <- "maximum"
+names(newindia_df)[1] <- "date"
+newindia_df$fit <- round(newindia_df$fit)
+newindia_df$minimum <- round(newindia_df$minimum)
+newindia_df$maximum <- round(newindia_df$maximum)
+```
+
+### Predictions for total confirmed cases in India for next week:
+
+```{r echo=FALSE}
+knitr::kable(newindia_df,align = "crrr",format.args = list(big.mark = ",", 
+  scientific = FALSE))
+```
+
+```{r echo=FALSE}
+errdate <- data.frame(date = as.Date(0:(today-101),origin = "2020-05-01"))
+errfit <- predict.lm(lm(cconfirmed[101:today]~poly(cdate[101:today],6)),errdate)
+errfit <- round(errfit)
+actual <- cconfirmed[101:today]
+#sse <- sum((errfit-actual)**2) # SSE
+#rmse <- data.frame(rmse = sqrt(mean((err$errfit-err$actual)**2))) # RMSE
+err <- cbind(errdate,errfit,actual)
+#ae(actual,errfit)
+err <- cbind(err,error = ape(actual,errfit)*100)
+names(err)[2] <- "fit"
+err$error <- round(err$error,2)
+err$error <- paste(err$error,"%")
+#rsq <- cor(err$fit, err$actual) ^ 2
+```
+
+### Graph showing total confirmed cases with our predictions for India:
+
+```{r echo=FALSE}
+par(las=2,mgp=c(5,1,0),mar=c(6,6,6,6))
+plot(err$date,err$actual,pch = 16,xlab = "date", col = "blue",xaxt = "n"
+     ,ylab = "no. of cases ", main = "confirmed cases in india")
+points(err$date,err$fit,col="red",pch=1)
+axis.Date(1, at=seq(min(err$date),max(err$date),by=1), format="%d %b %y")
+legend("topleft",c("Actual","Predicted"), 
+       col=c("blue","red"), lwd=2)
+```
+
+### Error Analysis:
+
+```{r echo=FALSE}
+knitr::kable(err,align = "crrr",format.args = list(big.mark = ",", 
+  scientific = FALSE))
+```
+
+```{r echo=FALSE}
+t_case=c();t_dead=c();t_recovered=c();t_date=c(1:today)
+count=0
+cols = seq(from=2, length=today,by=4)
+
+
+for (j in cols){
+  total_cases = 0
+  total_deaths = 0
+  total_recovered = 0
+  count = count + 1
+  for(i in world_df[,j]){
+    total_cases = total_cases + as.numeric(i)
+  }
+  for(i in world_df[,j+1]){
+    total_deaths = total_deaths + as.numeric(i)
+  }
+  for(i in world_df[,j+2]){
+    total_recovered = total_recovered + as.numeric(i)
+  }
+  t_case[count] = as.numeric(total_cases)
+  t_dead[count] = as.numeric(total_deaths)
+  t_recovered[count] = as.numeric(total_recovered)
+}
+wdate <- as.Date(t_date,origin = "2020-01-21")
+wdf = cbind(t_date,t_case,t_dead,t_recovered)
+
+wdf <- as.data.frame(wdf)
+wconfirmed <- as.numeric(wdf$t_case)
+wdeaths <- as.numeric(wdf$t_dead)
+wrecovered <- as.numeric(wdf$t_recovered)
+```
+
+### Graph showing total confirmed cases in World:
+
+```{r echo=FALSE}
+#polynomial regression
+wfit = lm(wconfirmed~poly(wdate,6))
+
+#scatter plot
+par(las=2,mgp=c(5,1,0),mar=c(6,6,6,6))
+plot(wdate,wconfirmed,pch = 16,xlab = "date", col = "blue",xaxt="n"
+     ,ylab = "no. of cases", main = "confirmed cases in world")
+points(wdate,fitted(wfit),col="red",pch=1)
+axis.Date(1, at=seq(min(wdate),max(wdate),by=10), format="%d %b %y")
+legend("topleft",c("Actual","Predicted"), col=c("blue","red"), lwd=2)
+```
+
+```{r pressure, echo=FALSE}
+a = today+1; b = today+7
+predict_date <- as.Date(a:b,origin="2020-01-20")
+new <- data.frame(wdate = as.Date(a:b ,origin = "2020-01-22"))
+preddate <- data.frame(wdate = as.Date(a:b ,origin = "2020-01-21"))
+pred_wconfirmed <-predict.lm(wfit,new,interval = "confidence",level = 0.95)
+newworld_df <- cbind(preddate, pred_wconfirmed)
+names(newworld_df)[3] <- "minimum"
+names(newworld_df)[4] <- "maximum"
+names(newworld_df)[1] <- "date"
+```
+
+### Predictions for total confirmed cases in World for next week:
+
+```{r echo=FALSE}
+knitr::kable(newworld_df,align = "crrr",format.args = list(big.mark = ",", 
+  scientific = FALSE))
+```
+
+```{r echo=FALSE}
+errdate <- data.frame(date = as.Date(0:(today-101),origin = "2020-05-01"))
+errfit <- predict.lm(lm(wconfirmed[101:today]~poly(wdate[101:today],6)),errdate)
+errfit <- round(errfit)
+actual <- wconfirmed[101:today]
+#sse <- sum((errfit-actual)**2) # SSE
+err <- cbind(errdate,errfit,actual)
+err <- cbind(err,error = ape(actual,errfit)*100)
+err$error <- round(err$error,2)
+#error <- sqrt((errfit[1:(today-100)]-actual[1:(today-100)])**2)
+#rmse <- data.frame(rmse = sqrt(mean((errfit[1:(today-100)]-actual[1:(today-100)])**2))) # RMSE
+names(err)[2] <- "fit"
+err$error <- paste(err$error,"%")
+#rsq <- cor(err$fit, err$actual) ^ 2
+```
+
+### Graph showing total confirmed cases with our predictions for World:
+
+```{r echo=FALSE}
+par(las=2,mgp=c(5,1,0),mar=c(6,6,6,6))
+plot(err$date,err$actual,pch = 16,xlab = "date", col = "blue",xaxt = "n"
+     ,ylab = "no. of cases ", main = "confirmed cases in india")
+points(err$date,err$fit,col="red",pch=1)
+axis.Date(1, at=seq(min(err$date),max(err$date),by=1), format="%d %b %y")
+legend("topleft",c("Actual","Predicted"), 
+       col=c("blue","red"), lwd=2)
+```
+
+### Error Analysis:
+
+```{r echo=FALSE}
+knitr::kable(err,align = "crrr",format.args = list(big.mark = ",", 
+  scientific = FALSE))
+```
