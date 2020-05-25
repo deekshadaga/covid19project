@@ -29,7 +29,6 @@ India_df <- rbind.fill(lapply(India_json,function(x) do.call("data.frame", as.li
 India_df <- do.call("rbind", India_json)
 India_df <- as.data.frame(India_df)
 
-
 I_date <- as.Date(India_df$date,format = "%Y-%m-%d")
 I_confirmed <- as.numeric(India_df$confirmed)
 I_deaths <- as.numeric(India_df$deaths)
@@ -40,10 +39,8 @@ confirmed <- as.numeric(world_df$confirmed)
 deaths <- as.numeric(world_df$deaths)
 recovered <- as.numeric(world_df$recovered)
 
-
-
 #No. of days since 22-jan-2020
-today = Sys.Date()-as.Date("2020-01-22")
+today = Sys.Date()-as.Date("2020-01-22")-1
 
 
 t_case=c();t_dead=c();t_date=c(1:today)
@@ -62,12 +59,22 @@ for (j in cols){
   t_case[count] = as.numeric(total_cases)
   t_dead[count] = as.numeric(total_deaths)
 }
-t_date <- as.Date(t_date,origin = "2020-01-21")
+t_date <- as.Date(t_date,origin = "2020-01-22")
 comp_w_df = cbind(t_date,t_case,t_dead)
 
 comp_w_df <- as.data.frame(comp_w_df)
 confirmed_1 <- as.numeric(comp_w_df$t_case)
 deaths_1 <- as.numeric(comp_w_df$t_dead)
+
+for(i in 1:today){
+  if(i != 1){
+    I_confirmed[i] = I_confirmed[i] - as.numeric(India_df[,2][i-1])
+    confirmed_1[i] = confirmed_1[i] - comp_w_df$t_case[i-1]
+  }else{confirmed_1[i] = confirmed_1[i];I_confirmed[i] = I_confirmed[i]}
+  
+}
+
+confirmed_1;t_date
 
 fit = lm(confirmed_1~poly(t_date,6))
 a = today+1; b = today+7
@@ -130,7 +137,6 @@ names(Final_2)[3] <- "Minimum"
 names(Final_2)[4] <- "Maximum"
 knitr::kable(Final_2,caption = "TABLE 2: This is the prediction for India",align = "crrr")
 ```
-
 
 ## Explanation, Inference and Error Analysis
 
